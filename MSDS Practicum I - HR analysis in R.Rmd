@@ -1,0 +1,512 @@
+---
+author: "Sylvester Brown"
+title: "Practicum I"
+school: "Regis University"
+date: "Spring 2020"
+output: pdf_document
+---
+
+
+### Purpose of project:
+
+Showcase skills in data manipulation and engineering, exploratory data analysis, visualizations and Machine leaning.
+
+
+### The problems to solve are:
+
+what main characteristics contribute to the reason of why employees are leaving?
+
+Which learning model appears to be better for predicting which employees will leave.
+
+
+### About the Dataset:
+
+The dataset belongs to William Walter. Data can be found at “https://www.kaggle.com/colara/human-resource”
+
+
+### Other Resources used:
+
+"Pandas for Everyone' by Daniel Chen
+
+https://www.kaggle.com/colara/human-resources-analytics-a-descriptive-analysis
+
+https://www.kaggle.com/daphnecor/predict-employee-turnover-rate-0
+
+https://www.kaggle.com/henryshtang/hr-data-exploration
+
+https://www.kaggle.com/rhuebner/human-resources-data-set/kernels
+
+
+
+### Libraries
+```{r}
+# load the data.table, dplyr, and ggplot2 libraries
+
+library(data.table)
+library(ggplot2)
+library(dplyr)
+library(reshape2)
+library(caret)
+library(Boruta)
+library(gmodels)
+library (Hmisc)
+library (caTools)
+library (ROCR)
+library(rpart.plot)
+
+```
+
+### Upload Data
+```{r}
+
+# use read.csv to import data
+hr <- read.csv("C:/Users/spbro/OneDrive/Desktop/Human Resources.csv")
+
+```
+
+### Eploratory Data Analysis
+```{r}
+# convert the data to a data table
+
+hr <- as.data.table(hr)
+
+# how many observations and columns are there?
+
+dim(hr)
+
+# Check to see if there are any missing values in our data and checking overall summary
+
+str(hr)
+
+summary(hr)
+```
+
+Rename Variables
+
+A closer look at the column names shows that some of the colums are not descriptive enough to help the analyst know what the column contains. For this reason the "Sales" column will need to be changed to "departments" and "average_montly_hours" will be changed to "average_monthly_hours". "Work_accidents" change to "work_accidents", "time_spend_company" to "time_spent_at_company", "number_project" to "number_of_projects"
+```{r}
+
+#Renaming dataset 
+
+hr<-rename(hr, c("satisfaction_level"="ï..satisfaction_level"))
+hr<-rename(hr, c("department"="sales"))
+hr<-rename(hr, c("average_monthly_hours"="average_montly_hours"))
+hr<-rename(hr, c("work_accidents"="Work_accident"))
+hr<-rename(hr, c("time_spent_at_company"="time_spend_company"))
+hr<-rename(hr, c("number_of_projects"="number_project"))
+
+hr$salary <- as.numeric(1:3)[match(hr$salary, c('low', 'medium', 'high'))]
+
+head(hr) # Display first 5 rows
+
+```
+
+```{r}
+turnover<-as.factor(hr$left)
+summary(turnover)
+
+perc_turnover_rate<-sum(hr$left/length(hr$left))*100
+#percentage of turnover
+print(perc_turnover_rate)
+```
+
+```{r}
+# Overview of summary (Turnover V.S. Non-turnover)
+cor_vars<-hr[,c("satisfaction_level","last_evaluation","number_of_projects","average_monthly_hours","time_spent_at_company","work_accidents","left","promotion_last_5years")]
+
+aggregate(cor_vars[,c("satisfaction_level","last_evaluation","number_of_projects","average_monthly_hours","time_spent_at_company","work_accidents","promotion_last_5years")], by=list(Category=cor_vars$left), FUN=mean)
+```
+
+ 
+
+
+Correlation Matrix
+```{r}
+
+
+cor_vars<-hr[,c("satisfaction_level","last_evaluation","number_of_projects","average_monthly_hours","time_spent_at_company","work_accidents","left","promotion_last_5years")]
+cor(cor_vars)
+trans<-cor(cor_vars)
+melted_cormat <- melt(trans)
+
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile() +theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+
+```
+Summary:
+
+From the heatmap, there is a positive correlation between number_project, average_montly_hours, and evaluation. Which appears to indicate that the employees who spent more hours and did more projects were evaluated highly. 
+
+For the negative relationships, turnover and satisfaction are highly correlated. This appears to indicate that people tend to leave a company more when they are less satisfied.
+
+
+
+Distribution Plots (Satisfaction - Evaluation - AverageMonthlyHours)
+```{r}
+# Satisfaction - Evaluation - AverageMonthlyHours
+par(mfrow=c(1,3))
+hist(hr$satisfaction_level, col="green")
+hist(hr$last_evaluation, col="red")
+hist(hr$average_monthly_hours, col="blue")
+
+```
+
+Summary: 
+
+ - Satisfaction - There is a huge spike for employees with low satisfaction and high satisfaction.
+ - Evaluation - There is a bimodal distrubtion of employees for low evaluations (less than 0.6) and high evaluations (more than 0.8)
+ - AverageMonthlyHours - There is another bimodal distribution of employees with lower and higher average monthly hours (less than 150 hours & more than 250 hours)
+ - The evaluation and average monthly hour graphs both share a similar distribution. 
+ - Employees with lower average monthly hours were evaluated less and vice versa.
+ 
+ 
+```{r}
+# Salary V.S. Turnover
+
+vis_1<-table(hr$salary,hr$left)
+#print(vis_1)
+d_vis_1<-as.data.frame(vis_1)
+print(d_vis_1)
+p<-ggplot(d_vis_1, aes(x=Var1,y=Freq,fill=Var2)) +
+ geom_bar(position="dodge",stat='identity') + coord_flip()
+
+print(p)
+
+```
+
+Summary: 
+
+ - Majority of employees who left either had low or medium salary.
+ - Barely any employees left with high salary
+
+
+```{r}
+# Department V.S. Turnover
+
+vis_2<-table(hr$department,hr$left)
+d_vis_2<-as.data.frame(vis_2)
+d_vis_2<-subset(d_vis_2,Var2==1)
+#print(d_vis_2)
+d_vis_2$Var1 <- factor(d_vis_2$Var1, levels = d_vis_2$Var1[order(-d_vis_2$Freq)])
+p<-ggplot(d_vis_2, aes(x=Var1,y=Freq,fill=Var1)) +
+ geom_bar(stat='identity') +theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+print(p)
+
+```
+Summary:
+
+ - The sales, technical, and support department were the top 3 departments to have employee turnover
+ - The management department had the smallest amount of turnover
+
+
+```{r}
+#Turnover V.S. ProjectCount
+
+vis_3<-table(hr$number_of_projects,hr$left)
+d_vis_3<-as.data.frame(vis_3)
+#print(d_vis_1)
+p<-ggplot(d_vis_3, aes(x=Var1,y=Freq,fill=Var2)) +
+ geom_bar(position="dodge",stat='identity') + coord_flip()
+
+print(p)
+```
+
+Summary:
+
+ - More than half of the employees with 2,6, and 7 projects left the company
+ - Majority of the employees who did not leave the company had 3,4, and 5 projects
+ - All of the employees with 7 projects left the company
+ - There is an increase in employee turnover rate as project count increases
+
+
+Kernel Density Plot
+```{r}
+# Kernel Density Plot
+left_data<-subset(hr,left==1)
+stay_data<-subset(hr,left==0)
+ggplot() + geom_density(aes(x=last_evaluation), colour="red", data=left_data) + 
+  geom_density(aes(x=last_evaluation), colour="blue", data=stay_data)
+```
+Summary: 
+ - There is a biomodal distribution for those that had a turnover. 
+ - Employees with low performance tend to leave the company more
+ - Employees with high performance tend to leave the company more
+ - The sweet spot for employees that stayed is within 0.6-0.8 evaluation
+ 
+
+```{r}
+#KDEPlot: Kernel Density Estimate Plot
+
+ggplot() + geom_density(aes(x=average_monthly_hours), colour="red", data=left_data) + 
+  geom_density(aes(x=average_monthly_hours), colour="blue", data=stay_data)
+```
+
+Summary: 
+ - Another bi-modal distribution for employees that turnovered 
+ - Employees who had less hours of work (~150hours or less) left the company more
+ - Employees who had too many hours of work (~250 or more) left the company 
+ - Employees who left generally were underworked or overworked.
+ 
+ 
+```{r}
+
+#KDEPlot: Kernel Density Estimate Plot
+ggplot() + geom_density(aes(x=satisfaction_level), colour="red", data=left_data) + 
+  geom_density(aes(x=satisfaction_level), colour="blue", data=stay_data)
+```
+Summary: 
+ - There is a tri-modal distribution for employees that turnovered
+ - Employees who had really low satisfaction levels (0.2 or less) left the company more
+ - Employees who had low satisfaction levels (0.3~0.5) left the company more
+ - Employees who had really high satisfaction levels (0.7 or more) left the company more
+ 
+ 
+ BOXPLOT
+```{r}
+#ProjectCount VS AverageMonthlyHours [BOXPLOT]
+
+p<-ggplot(hr, aes(x = factor(number_of_projects), y = average_monthly_hours, fill = factor(left))) +
+  geom_boxplot() + scale_fill_manual(values = c("yellow", "orange"))
+print(p)
+
+```
+
+Summary:
+ - As project count increased, so did average monthly hours
+ - Something weird about the boxplot graph is the difference in averageMonthlyHours between people who had a turnver and did not. 
+ - Looks like employees who did not have a turnover had consistent averageMonthlyHours, despite the increase in projects
+ - In contrast, employees who did have a turnover had an increase in averageMonthlyHours with the increase in projects
+
+
+```{r}
+#ProjectCount VS Evaluation
+#Looks like employees who did not leave the company had an average evaluation of around 70% even with different projectCounts
+#There is a huge skew in employees who had a turnover though. It drastically changes after 3 projectCounts. 
+#Employees that had two projects and a horrible evaluation left. Employees with more than 3 projects and super high evaluations left
+
+p<-ggplot(hr, aes(x = factor(number_of_projects), y = last_evaluation, fill = factor(left))) +
+  geom_boxplot() + scale_fill_manual(values = c("yellow", "orange"))
+print(p)
+```
+
+Summary:
+Looks like employees who did not leave the company had an average evaluation of around 70% even with different projectCounts
+There is a huge skew in employees who had a turnover though. It drastically changes after 3 projectCounts. 
+Employees that had two projects and a horrible evaluation left. Employees with more than 3 projects and super high evaluations left. What I find strange with this graph is with the turnover group. There is an increase in evaluation for employees who did more projects within the turnover group. But, again for the non-turnover group, employees here had a consistent evaluation score despite the increase in project counts. 
+
+
+Satisfaction VS Evaluation
+```{r}
+
+ggplot(hr, aes(satisfaction_level, last_evaluation, color = left)) +
+  geom_point(shape = 16, size = 5, show.legend = FALSE) +
+  theme_minimal() +
+  scale_color_gradient(low = "#0091ff", high = "#f0650e")
+```
+
+Summary:
+
+There are 3 distinct clusters for employees who left the company
+ 
+- Cluster 1 (Hard-working and Sad Employee): Satisfaction was below 0.2 and evaluations were greater than 0.75. Which could be a good indication that employees who left the company were good workers but felt horrible at their job. 
+
+
+- Cluster 2 (Bad and Sad Employee): Satisfaction between about 0.35~0.45 and evaluations below ~0.58. This could be seen as employees who were badly evaluated and felt bad at work.
+
+
+- Cluster 3 (Hard-working and Happy Employee): Satisfaction between 0.7~1.0 and evaluations were greater than 0.8. Which could mean that employees in this cluster were "ideal". They loved their work and were evaluated highly for their performance. 
+
+ 
+
+```{r}
+```
+Feature Importance selection using BORUTA
+
+Boruta is a feature selection algorithm. Precisely, it works as a wrapper algorithm around Random Forest. This package derive its name from a demon in Slavic mythology who dwelled in pine forests.  Feature selection is a crucial step in predictive modeling. This technique achieves supreme importance when a data set comprised of several variables is given for model building.
+
+Boruta can be your algorithm of choice to deal with such data sets. Particularly when one is interested in understanding the mechanisms related to the variable of interest, rather than just building a black box predictive model with good prediction accuracy.
+
+
+
+```{r}
+hr$left<-as.factor(hr$left)
+boruta.train <- Boruta(left~., data = hr, doTrace = 2)
+
+print(boruta.train)
+plot(boruta.train, xlab = "", xaxt = "n")
+
+lz<-lapply(1:ncol(boruta.train$ImpHistory),function(i)
+boruta.train$ImpHistory[is.finite(boruta.train$ImpHistory[,i]),i])
+names(lz) <- colnames(boruta.train$ImpHistory)
+Labels <- sort(sapply(lz,median))
+axis(side = 1,las=2,labels = names(Labels),
+at = 1:ncol(boruta.train$ImpHistory), cex.axis = 0.7)
+           
+```
+
+Key Observations:
+The above graph clearly represents the factors which serve as the top reasons for emplpoyee who left the company:
+
+* Satisfaction level: it already had a negative corellation with the outcome. People with low satisfaction were most likely to leave even when compared with evaluations(Evident cluster was formed with respect to low satisfaction)
+
+* Salary and the role they played has one of the least impact on attrition
+
+* Pressure due to the number of projects and how they were evaluated also holds key significance in determining attrition
+
+
+
+
+## DATA MODELING OR MACHINE LEARNING 
+
+Logistic Regression Analysis
+
+```{r}
+#Creating training and test sets for the logistic regression
+smp_size <- floor(0.75 * nrow(hr))
+
+## set the seed to make your partition reproductible
+set.seed(123)
+train_ind <- sample(seq_len(nrow(hr)), size = smp_size)
+
+train <- hr[train_ind, ]
+test <- hr[-train_ind, ]
+
+dim(test)
+dim(train)
+
+```
+
+
+
+
+```{r}
+#Training the model
+
+
+logit_model<-glm(left~satisfaction_level+last_evaluation+average_monthly_hours+salary+department+number_of_projects,data=train,binomial())
+
+summary(logit_model)
+
+test$logit_model<-predict(logit_model,test)
+#head(test)
+
+colAUC(test$logit_model,test$left, plotROC=TRUE)
+
+#An approach to identify the cut-off for the predicted probabilities 
+#is to use a binned table of the proababilities. See the exact threshold 
+#where 0's and 1's are getting classified with high precision and recall
+#you can use the two commented lines below to get the threshold manually
+#test$logit_model_bin <- cut2(test$logit_model,g=12)
+
+#CrossTable(test$left, test$logit_model_bin,prop.chisq=FALSE,prop.r=FALSE,prop.t=FALSE)
+
+#Now using that threshold created the predicted values for each record
+test$prediction<-ifelse(test$logit_model>=-.95,1,0)
+
+#Make use of the confusion matrix to calculate accuracy, precision and recall
+#CrossTable(test$left, test$prediction,prop.chisq=FALSE,prop.r=FALSE,prop.t=FALSE)
+conf_mat<-table(test$left,test$prediction)
+
+#print(conf_mat)
+#class(conf_mat)
+accuracy<-(conf_mat[1,1]+conf_mat[2,2])/(conf_mat[1,1]+conf_mat[2,2]+conf_mat[1,2]+conf_mat[2,1])
+recall<-(conf_mat[2,2])/(conf_mat[1,2]+conf_mat[2,2])
+precision<-(conf_mat[2,2])/(conf_mat[2,2]+conf_mat[2,1])
+
+print(c("Accuracy:",accuracy))
+print(c("Precision:",precision))
+print(c("Recall:",recall))
+
+
+#red <- prediction(test$prediction, test$left)
+#P.perf <- performance(pred, "prec", "rec")
+#lot (RP.perf)
+
+```
+
+
+
+Fold Cross Validation for Logistic Regression
+```{r}
+
+# define training control
+train_control <- trainControl(method="cv", number=10)
+train$left<-as.factor(train$left)
+# fix the parameters of the algorithm
+grid <- expand.grid()
+# train the model
+model <- train(left~., data=train, trControl=train_control, method="glm",family=binomial())
+#model <- train(left~satisfaction_level+last_evaluation+number_project+exp_in_company+average_montly_hours, data=train, trControl=train_control, method="glm",family=binomial())
+# summarize results
+print(model)
+```
+
+
+Logistic Regression V.S. Random Forest V.S. Decision Tree V.S. AdaBoost Model
+
+
+```{r}
+
+
+# NOTE: By adding in "class_weight = balanced", the Logistic Auc increased by about 10%! This adjusts the threshold value
+
+
+# Decision Tree Model
+library(rpart.plot)
+trctrl <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+set.seed(3333)
+dtree_fit <- train(left ~., data = train, method = "rpart",
+                   parms = list(split = "information"),
+                   trControl=trctrl,
+                   tuneLength = 10)
+print(dtree_fit)
+
+#plot decision tree
+#p<-prp(dtree_fit$finalModel, box.palette = "Reds", tweak = 1.2)
+#print(p)
+
+```
+
+
+```{r}
+# Random Forest Model
+
+train$left<-as.factor(train$left)
+
+
+ctrl = trainControl(method="repeatedcv", number=10, repeats=5, selectionFunction = "oneSE")
+
+
+rf_model<-train(left~.,data=train,method="rf",
+               trControl=ctrl,
+               prox=TRUE,allowParallel=TRUE)
+print("random forest")
+print(rf_model)
+
+```
+
+Modeling the Data
+
+ The best model performance out of the four (Decision Tree Model, AdaBoost Model, Logistic Regression Model, Random Forest Model) was Random Forest! 
+
+
+Summary:
+
+With all of this information, this is what Bob should know about his company and why his employees probably left:
+ 1. Employees generally left when they are underworked (less than 150hr/month or 6hr/day)
+ 2. Employees generally left when they are overworked (more than 250hr/month or 10hr/day)
+ 3. Employees with either really high or low evaluations should be taken into consideration for high turnover rate
+ 4. Employees with low to medium salaries are the bulk of employee turnover
+ 5. Employees that had 2,6, or 7 project count was at risk of leaving the company
+ 6. Employee satisfaction is the highest indicator for employee turnover.
+ 7. Employee that had 4 and 5 yearsAtCompany should be taken into consideration for high turnover rate
+ 
+
+## Recommendation: 
+ 
+Satisfaction level is the major impact on whether employees stay or leave the company.
+ Improve work life balance by having the right number of projects. Employees with 3-4 projects assigned tend to stay. Similarly, number of average hours a month plays a role in employees leaving or staying.
+Provide training so that their evaluation score can improve. The data shows that employees with a low evaluation score are likely to leave.
+ 
