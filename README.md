@@ -62,3 +62,10 @@ Week 6 – Machine learning (part 2)
 Week 7 – GitHub, PowerPoint presentation
 
 Week 8 – Finalize deliverables and Submit Results
+
+
+Future Work
+
+Additional ideas I would like to pursue are:
+
+-	Explore major visualization technics in R, Python and Tableau for analysis and presentation
