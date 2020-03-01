@@ -25,7 +25,7 @@ Finding a Dataset:
 There appears to be no real-world dataset from a company. So far, my research has led me to
 believe that all dataset in this field have been somewhat engineered for use in a data science
 setting or project. On Kaggle.com I discovered the dataset “Human Resource.” The dataset
-belongs to William Walter. Data can be found at “https://www.kaggle.com/colara/humanresource”
+belongs to William Walter. Data can be found at “https://www.kaggle.com/colara/human-resource”
 
 
 Description:
