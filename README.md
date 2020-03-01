@@ -1,4 +1,4 @@
-Proposal: Human Resources Data challenge
+Proposal: Human Resources Data Analysis
 
 Sylvester Brown
 
@@ -49,14 +49,10 @@ Timeline:
 
 Week 2 – Research and Data Preprocessing
 
-Week 3 – Explore Data in Multiple Formats (EDA part 1)
-
-. Data munging and engineering
+Week 3 – Explore Data in Multiple Formats (EDA part 1): Data munging and engineering
 
 
-Week 4 - Explore Data in Multiple Formats (EDA part 2)
-
-. visualization
+Week 4 - Explore Data in Multiple Formats (EDA part 2): visualization
 
 
 Week 5 – machine learning (part 1)
